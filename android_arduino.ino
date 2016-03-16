@@ -15,8 +15,6 @@ high output.
 */
 
 #include <Ethernet.h>
-#include <ArduinoJson.h>
-#include "PubNub.h"
 
 // Enter a MAC address and IP address for your controller below.
 // The IP address will be dependent on your local network.
@@ -55,14 +53,6 @@ long lastDebounceTime;  // the last time the output pin was toggled
 const long debounceDelay = 100;    // the debounce time; increase if the output flickers
 String leitura;
 
-//Configuração PubNub
-const static char pubkey[] = "pub-c-24a86643-ecbc-40b3-ad4f-18f4b24f568e";//"pub-c-f9671646-b308-4006-9ed1-ea7177b4e42e";//demo";//
-const static char subkey[] = "sub-c-27383722-e188-11e5-ba64-0619f8945a4f";//"sub-c-f83d4e6a-e260-11e5-a25a-02ee2ddab7fe";//demo";//
-const static char channel[] = "ANDRUINO";//"led1";//"Arduino";//"hello_world";
-
-//Configuração JSON
-StaticJsonBuffer<200> jsonBuffer;
-
 void setup() {
   // make the pins outputs:
   pinMode(pinLedVerde, OUTPUT);
@@ -70,16 +60,8 @@ void setup() {
   pinMode(pinLedVermelho, OUTPUT);
   
   // make the pins inputs:
-  //pinMode(pinBotaoVerde, INPUT);
-  //digitalWrite(pinBotaoVerde, HIGH);
   pinMode(pinBotaoVerde, INPUT_PULLUP);
-  
-  //pinMode(pinBotaoAmarelo, INPUT);
-  //digitalWrite(pinBotaoAmarelo, HIGH);
   pinMode(pinBotaoAmarelo, INPUT_PULLUP);
-  
-  //pinMode(pinBotaoVermelho, INPUT);
-  //digitalWrite(pinBotaoVermelho, HIGH);
   pinMode(pinBotaoVermelho, INPUT_PULLUP);
 
   valor = 0;
@@ -93,11 +75,11 @@ void setup() {
 
   // start the Ethernet connection:
   Serial.println("Trying to get an IP address using DHCP");
-//  if (Ethernet.begin(mac) == 0) {
-//    Serial.println("Failed to configure Ethernet using DHCP");
+  if (Ethernet.begin(mac) == 0) {
+    Serial.println("Failed to configure Ethernet using DHCP");
     // initialize the Ethernet device not using DHCP:
     Ethernet.begin(mac, ip, myDns, gateway, subnet);
-//  }
+  }
   // print your local IP address:
   Serial.print("My IP address: ");
   ip = Ethernet.localIP();
@@ -128,7 +110,6 @@ String ImprimirValor(byte valor)
     teste =  valor / 100;
     valor = valor % 100;
     texto.concat(teste);
-    Serial.print(teste);
   }
 
   if (valor > 10)
@@ -136,25 +117,24 @@ String ImprimirValor(byte valor)
     teste =  valor / 10;
     valor = valor % 10;
     texto.concat(teste);
-    Serial.print(teste);
   }
 
   texto.concat(valor);  
-  Serial.print(valor);
   return texto;
 }
 
 void AtualizarValorTCP(byte led, byte valor)
 {
   for (byte i = 0; i < numClientes; i++) {
-    //if (clients[i] && (clients[i] != client)) {
     if (clients[i]) {
       // clear out the input buffer:
       clients[i].flush();
-      clients[i].print("led");
+      
+      clients[i].print("{\"bt");
       clients[i].print(led);
-      clients[i].print("-");
-      clients[i].println(ImprimirValor(valor));
+      clients[i].print("\":");
+      clients[i].print(ImprimirValor(valor));
+      clients[i].println("}");
     }
   }
 }
@@ -193,19 +173,20 @@ void Debounce()
           {
             valor = 255;
           }
+          i++;
           switch(i)
           {
-            case 0:            
+            case 1:            
                 digitalWrite(pinLedVerde, valor);                
                 Serial.print("Verde: ");
             break;
   
-            case 1:
+            case 2:
               digitalWrite(pinLedAmarelo, valor);
               Serial.print("Amarelo: ");
             break;
   
-            case 2:
+            case 3:
               digitalWrite(pinLedVermelho, valor);
               Serial.print("Vermelho: ");
             break;
@@ -226,10 +207,12 @@ void Parser(char thisChar)
 {
   if (thisChar == '\n')
   {
-    if (leitura.startsWith("led"))
+    //{"led1":0}
+    
+    if (leitura.startsWith("{\"led"))
     {
       byte colon1 = leitura.indexOf("d");
-      byte colon2 = leitura.indexOf("-");
+      byte colon2 = leitura.indexOf(":");
       byte btnVal = leitura.substring(colon1 + 1, colon2).toInt();
       byte ledVal = leitura.substring(colon2 + 1).toInt();
 
@@ -270,12 +253,6 @@ void loop() {
 
   // when the client sends the first byte, say hello:
   if (client) {
-//    if (!gotAMessage) {
-//      Serial.println("We have a new client");
-//      client.println("Hello, client!");
-//      gotAMessage = true;
-//    }
-
     boolean newClient = true;
     for (byte i = 0; i < numClientes; i++) {
       //check whether this client refers to the same socket as one of the existing instances:
@@ -300,14 +277,6 @@ void loop() {
         }
       }
     }
-
-//    // read the bytes incoming from the client:
-//    char thisChar = client.read();
-//    // echo the bytes back to the client:
-//    server.write(thisChar);
-//    // echo the bytes to the server as well:
-//    Serial.print(thisChar);
-//    Ethernet.maintain();
 
     if (client.available() > 0) {
       // read the bytes incoming from the client:
